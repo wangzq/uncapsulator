@@ -52,14 +52,12 @@ namespace Uncapsulator
                 instance,
                 callSiteType: typeof (T));
 
-#if COMPAT_V1
         /// <summary>
         /// This overload is included for backward compatibility.
         /// </summary>
         [EditorBrowsable (EditorBrowsableState.Never)]
         public static dynamic Uncapsulate (this object instance, bool useGlobalCache)
             => new Uncapsulator (null, new Uncapsulator.UncapsulatorOptions (useGlobalCache, false), instance);
-#endif
 
         /// <summary>
         /// Clears any type data that was cached statically by virtue of calling Uncapsulate(true)
@@ -193,20 +191,23 @@ namespace Uncapsulator
 
         Type[] GetTypeArguments (InvokeMemberBinder binder)
         {
-            var uncap = binder.Uncapsulate (useGlobalCache: true);
-
             // We are looking at the private members of Microsoft.CSharp.RuntimeBinder.CSharpInvokeMemberBinder, but the implementation differs
             // between .NET Framwork and .NetCore. The former uses List<Type> m_typeArguments whereas the latter uses Type[] TypeArg.
-
             if (IsDotNetFramework)
             {
-                // It is important to cast uncap.m_typeArguments to List<Type> before calling ToArray(), otherwise we will be calling ToArray()
-                // on a dynamic object which means it will call TryInvokeMember recursively and we will end up with a stack overflow.
-                var list = (List<Type>)uncap.m_typeArguments;
-                return list.ToArray ();
+                // When using from PowerShell the InvokeMemberBinder will be PSInvokeMemberBinder that doesn't have m_typeArguments
+                if (binder.GetType().Name == "CSharpInvokeMemberBinder")
+                {
+                    // It is important to cast uncap.m_typeArguments to List<Type> before calling ToArray(), otherwise we will be calling ToArray()
+                    // on a dynamic object which means it will call TryInvokeMember recursively and we will end up with a stack overflow.
+                    var list = (List<Type>)binder.Uncapsulate (useGlobalCache: true).m_typeArguments;
+                    return list.ToArray ();
+                }
+                
+                return Array.Empty<Type>();
             }
-            else
-                return (Type[])uncap.TypeArguments;
+            
+            return (Type[])binder.Uncapsulate (useGlobalCache: true).TypeArguments;
         }
 
         bool TryCastTo (InvokeMemberBinder binder, object[] args, Lazy<Type[]> typeArgs, out object result)
