@@ -407,6 +407,9 @@ namespace Uncapsulator
                 }
                 catch (MissingMethodException ex)
                 {
+                    // Another PowerShell patch when invoking certain private method
+                    if (methods.Length == 1) return methods[0];
+                        
                     if (!throwOnBadMethodOverload) return null;
                     throw ex.Wrap ($"Error binding type '{t}' to method '{memberName}'");
                 }
